@@ -130,7 +130,7 @@ This appears to instantiate `mdspan<double>`, and then
   `basic_mdspan<double, extents<>>`; a multi-dimensional array of rank 0.
 This will lead to a static assertion as `basic_mdspan`'s dynamic extent
   constructor.
-[You can see the code on Godbolt here](https://godbolt.org/z/P8cTcj).
+[You can see the code on Godbolt here](https://godbolt.org/z/o6nbsW).
 
 # Solutions # {#solutions}
 
@@ -151,7 +151,7 @@ Perhaps there is a way of formulating a deduction guide for `basic_mdspan` that
 
 One way we could solve this problem would be to make `mdspan` a template class,
   not a template alias, and then give that template class such a deduction guide.
-[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/Yec1G6)
+[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/3dn9Yf)
 
 However, making `mdspan` a template class instead of a template alias would
   introduce all sorts of other challenges, as it would become a distinct type
