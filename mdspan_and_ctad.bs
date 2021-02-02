@@ -1,0 +1,171 @@
+<pre class='metadata'>
+Title: `mdspan` and CTAD
+H1: <code>mdspan</code> and CTAD
+Shortname: D2299
+Revision: 0
+Status: D
+Group: WG21
+Audience: WG21
+Editor: Bryce Adelstein Lelbach (he/him/his) — Library Evolution Chair, NVIDIA, brycelelbach@gmail.com
+URL: https://wg21.link/D2299
+!Source: <a href="https://github.com/brycelelbach/wg21_p2299_mdspan_and_ctad/blob/main/mdspan_and_ctad.bs">GitHub</a>
+Issue Tracking: GitHub https://github.com/brycelelbach/wg21_p2299_mdspan_and_ctad/issues
+Metadata Order: Editor, This Version, Source, Issue Tracking, Project, Audience
+Markup Shorthands: markdown yes
+Toggle Diffs: no
+No Abstract: yes
+Boilerplate: style-syntax-highlighting off
+</pre>
+
+<style>
+pre {
+  margin-top: 0px;
+  margin-bottom: 0px;
+}
+.ins, ins, ins *, span.ins, span.ins * {
+  background-color: rgb(200, 250, 200);
+  color: rgb(0, 136, 0);
+  text-decoration: none;
+}
+.del, del, del *, span.del, span.del * {
+  background-color: rgb(250, 200, 200);
+  color: rgb(255, 0, 0);
+  text-decoration: line-through;
+  text-decoration-color: rgb(255, 0, 0);
+}
+math, span.math {
+  font-family: serif;
+  font-style: italic;
+}
+ul {
+  list-style-type: "— ";
+}
+blockquote {
+  counter-reset: paragraph;
+}
+div.numbered, div.newnumbered {
+  margin-left: 2em;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+div.numbered:before, div.newnumbered:before {
+  position: absolute;
+  margin-left: -2em;
+  display-style: block;
+}
+div.numbered:before {
+  content: counter(paragraph);
+  counter-increment: paragraph;
+}
+div.newnumbered:before {
+  content: "�";
+}
+div.numbered ul, div.newnumbered ul {
+  counter-reset: list_item;
+}
+div.numbered li, div.newnumbered li {
+  margin-left: 3em;
+}
+div.numbered li:before, div.newnumbered li:before {
+  position: absolute;
+  margin-left: -4.8em;
+  display-style: block;
+}
+div.numbered li:before {
+  content: "(" counter(paragraph) "." counter(list_item) ")";
+  counter-increment: list_item;
+}
+div.newnumbered li:before {
+  content: "(�." counter(list_item) ")";
+  counter-increment: list_item;
+}
+</style>
+
+# Introduction # {#introduction}
+
+[[P0009R10]]'s `mdspan` is a convenience template alias for simpler use cases of
+  `basic_mdspan`:
+
+```
+template <class ElementType, ptrdiff_t... Extents>
+using mdspan = basic_mdspan<ElementType, extents<Extents...>>;
+```
+
+In the `basic_mdspan`/`span` interface, extents can be either static, e.g.
+  expressed at compile time:
+
+```
+mdspan<double, 64, 64> a(data);
+```
+
+or dynamic, e.g. expressed at run time:
+
+```
+mdspan<double, dynamic_extent, dynamic_extent> a(data, 64, 64);
+```
+
+You can also use a mix of the two styles:
+
+```
+mdspan<double, 64, dynamic_extent> a(data, 64);
+```
+
+# Problem # {#problem}
+
+The [[P0009R10]] interface style for expressing extents currently interacts
+  poorly with Class Template Argument Deduction (CTAD).
+As of C++20, CTAD now works with template aliases, so you can write this:
+
+```
+mdspan a(data, 64, 64);
+```
+
+This syntax would be very nice.
+It would remove the need to explicitly spell out the verbose `dynamic_extent`
+  when dealing with run time extents, which I believe is the common case for
+  most users.
+
+However, the above code does not appear to do what you might expect.
+This appears to instantiate `mdspan<double>`, and then
+  `basic_mdspan<double, extents<>>`; a multi-dimensional array of rank 0.
+This will lead to a static assertion as `basic_mdspan`'s dynamic extent
+  constructor.
+[You can see the code on Godbolt here](https://godbolt.org/z/P8cTcj).
+
+# Solutions # {#solutions}
+
+If `mdspan` was a template class, not a template alias, we could simply add
+  a deduction guide to handle this:
+
+```
+template <class ElementType, class... IndexType>
+explicit mdspan(ElementType*, IndexType...)
+  -> mdspan<ElementType, [] (auto) constexpr
+                         { return dynamic_extent; }
+                         (identity<IndexType>{})...>;
+```
+
+However, it seems you cannot add a deduction guide for a template alias.
+Perhaps there is a way of formulating a deduction guide for `basic_mdspan` that
+  would help here, however I could not find a way of doing this.
+
+One way we could solve this problem would be to make `mdspan` a template class,
+  not a template alias, and then give that template class such a deduction guide.
+[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/Yec1G6)
+
+However, making `mdspan` a template class instead of a template alias would
+  introduce all sorts of other challenges, as it would become a distinct type
+  from `basic_mdspan` and functions taking a `basic_mdspan` would not take an
+  `mdspan`.
+Perhaps we could come up with a solution, possibly involving conversions, that
+  would be acceptable.
+
+# P.S. No `ptrdiff_t` # {#ps-no-ptrdiff-t}
+
+A final, partially related note: [[P0009R10]] must be updated to use `size_t`
+  instead of `ptrdiff_t`.
+As much as I love signed types, `dynamic_extent`, which shipped in `<span>`
+  in C++20, is defined as a `size_t`.
+If `extents`, `mdspan`, and `basic_mdspan` use `ptrdiff_t`, users will
+  experience all sorts of signedness and narrowing warnings when trying to use
+  `dynamic_extent` with these facilities.
