@@ -1,13 +1,13 @@
 <pre class='metadata'>
 Title: `mdspan` and CTAD
 H1: <code>mdspan</code> and CTAD
-Shortname: D2299
+Shortname: P2299
 Revision: 0
-Status: D
+Status: P
 Group: WG21
 Audience: WG21
 Editor: Bryce Adelstein Lelbach (he/him/his) — Library Evolution Chair, NVIDIA, brycelelbach@gmail.com
-URL: https://wg21.link/D2299
+URL: https://wg21.link/P2299
 !Source: <a href="https://github.com/brycelelbach/wg21_p2299_mdspan_and_ctad/blob/main/mdspan_and_ctad.bs">GitHub</a>
 Issue Tracking: GitHub https://github.com/brycelelbach/wg21_p2299_mdspan_and_ctad/issues
 Metadata Order: Editor, This Version, Source, Issue Tracking, Project, Audience
