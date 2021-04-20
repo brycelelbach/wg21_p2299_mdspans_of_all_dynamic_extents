@@ -1,9 +1,9 @@
 <pre class='metadata'>
 Title: `mdspan` and CTAD
 H1: <code>mdspan</code> and CTAD
-Shortname: D2299
+Shortname: P2299
 Revision: 1
-Status: D
+Status: P
 Group: WG21
 Audience: WG21
 Editor: Bryce Adelstein Lelbach (he/him/his) — Library Evolution Chair, NVIDIA, brycelelbach@gmail.com
