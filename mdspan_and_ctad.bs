@@ -168,26 +168,26 @@ We could add some helper aliases or classes to simplify the use case of all dyna
   extents:
 
 ```
-template <size_t N, size_t... Extents>
+template <size_t Rank, size_t... Extents>
 struct __generate_dynamic_extents {
-    using type = typename __generate_dynamic_extents<
-        N - 1, dynamic_extent, Extents...
-    >::type;
+  using type = typename __generate_dynamic_extents<
+    Rank - 1, dynamic_extent, Extents...
+  >::type;
 };
 
 template <size_t... Extents>
 struct __generate_dynamic_extents<0, Extents...> {
-    using type = extents<Extents...>;
+  using type = extents<Extents...>;
 };
 
-template <size_t N>
-using dynamic_extents = typename __generate_dynamic_extents<N>::type;
+template <size_t Rank>
+using dynamic_extents = typename __generate_dynamic_extents<Rank>::type;
 
 template <class ElementType, size_t Rank>
 using dynamic_mdspan = basic_mdspan<ElementType, dynamic_extents<Rank>>;
 ```
 
-[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/oencEe6ev)
+[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/1j34553e1)
 
 ## Rename `(mdspan|extents)` to `static_(extents|mdspan)` ## {#solutions-rename-mdspan-extents}
 
