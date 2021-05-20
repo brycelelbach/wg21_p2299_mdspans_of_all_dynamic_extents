@@ -18,6 +18,14 @@ Boilerplate: style-syntax-highlighting off
 </pre>
 
 <style>
+table, th, tr, td {
+  border: 2px solid black !important;
+}
+@media (prefers-color-scheme: dark) {
+  table, th, tr, td {
+    border: 2px solid white !important;
+  }
+}
 pre {
   margin-top: 0px;
   margin-bottom: 0px;
@@ -83,10 +91,16 @@ div.newnumbered li:before {
 
 # Introduction # {#introduction}
 
-[[P0009R10]]'s `mdspan` is a convenience template alias for simpler use cases of
-  `basic_mdspan`:
+[[P0009R11]] proposes adding non-owning multidimensional span abstractions
+  to the C++ Standard Library; `basic_mdspan`, which is fully generic and
+  can represent any kind of multidimensional data, and `mdspan`, a
+  convenience template alias for simpler use cases.
 
 ```
+template <class ElementType, class Extents, class LayoutPolicy = layout_right,
+          class AccessorPolicy = accessor_basic<ElementType>>
+struct basic_mdspan;
+
 template <class ElementType, size_t... Extents>
 using mdspan = basic_mdspan<ElementType, extents<Extents...>>;
 ```
@@ -110,100 +124,116 @@ You can also use a mix of the two styles:
 mdspan<double, 64, dynamic_extent> a(data, 64);
 ```
 
-# Problem # {#problem}
+While `basic_mdspan` and `mdspan` are powerful, the spelling of instantiations
+  can be verbose, especially for the common case where all extents are dynamic.
 
-The [[P0009R10]] interface style for expressing extents currently interacts
-  poorly with Class Template Argument Deduction (CTAD).
-As of C++20, CTAD now works with template aliases, so you can write this:
+Using class template argument deduction (introduced in C++17) and alias
+  template argument deduction (introduced in C++20), we can make it a easier to
+  use `mdspan` with all dynamic extents:
 
-```
-mdspan a(data, 64, 64);
-```
+<table class="before_after">
+<tr class="before_after">
+<th>Before
+<th>After
+<tr class="before_after">
+<td><code>mdspan&lt;double, dynamic_extent, dynamic_extent&gt; a(data, 64, 64);</code>
+<td><code>mdspan a(data, 64, 64);</code>
+</table>
 
-This syntax would be very nice.
-It would remove the need to explicitly spell out the verbose `dynamic_extent`
-  when dealing with run time extents, which I believe is the common case for
-  most users.
+To make this work, we need to add a deduction guide for `basic_mdspan`.
+Through the power of alias template argument deduction, `mdspan` will be
+  able to use said deduction guide as well.
 
-However, the above code does not appear to do what you might expect.
-This appears to instantiate `mdspan<double>`, and then
-  `basic_mdspan<double, extents<>>`; a multi-dimensional array of rank 0.
-This will lead to a static assertion as `basic_mdspan`'s dynamic extent
-  constructor.
-[You can see the code on Godbolt here](https://godbolt.org/z/o6nbsW).
+Here's [an example implementation](https://godbolt.org/z/z3s4KG9ae) of such a
+  deduction guide for `basic_mdspan`.
 
-# Solutions # {#solutions}
+In earlier versions of this paper, it was unclear whether such a deduction
+  guide would work for the alias template `mdspan`, as attempts to construct
+  one that functioned as intended had failed.
+However, we have since learned that the this is due to bugs in the two
+  implementations that currently support alias template deduction, MSVC
+  and GCC.
+Those bugs have been reported to the respective compilers and hopefully
+  will be fixed soon.
 
-## Make `mdspan` A Template Class ## {#solutions-mdspan-template-class}
-
-If `mdspan` was a template class, not a template alias, we could simply add
-  a deduction guide to handle this:
-
-```
-template <class ElementType, class... IndexType>
-explicit mdspan(ElementType*, IndexType...)
-  -> mdspan<ElementType, [] (auto) constexpr
-                         { return dynamic_extent; }
-                         (identity<IndexType>{})...>;
-```
-
-However, it seems you cannot add a deduction guide for a template alias.
-Perhaps there is a way of formulating a deduction guide for `basic_mdspan` that
-  would help here, however I could not find a way of doing this.
-
-One way we could solve this problem would be to make `mdspan` a template class,
-  not a template alias, and then give that template class such a deduction guide.
-[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/oY4vqdYv3)
-
-However, making `mdspan` a template class instead of a template alias would
-  introduce all sorts of other challenges, as it would become a distinct type
-  from `basic_mdspan` and functions taking a `basic_mdspan` would not take an
+Here's [an example](https://godbolt.org/z/nofs8bT9E) of the current
+  implementation bugs that prevent the deduction guide from working for
   `mdspan`.
-Perhaps we could come up with a solution, possibly involving conversions, that
-  would be acceptable.
 
-## Add `dynamic_extents` And `dynamic_mdspan` ## {#solutions-dynamic-extents-and-dynamic-mdspan}
+# Wording # {#wording}
 
-We could add some helper aliases or classes to simplify the use case of all dynamic
-  extents:
+The following changes are relative to the `mdspan` proposal ([[P0009R11]]).
 
-```
-template <size_t Rank, size_t... Extents>
-struct __generate_dynamic_extents {
-  using type = typename __generate_dynamic_extents<
-    Rank - 1, dynamic_extent, Extents...
-  >::type;
-};
+The � character is used to denote a placeholder number which shall be selected by the editor.
 
-template <size_t... Extents>
-struct __generate_dynamic_extents<0, Extents...> {
-  using type = extents<Extents...>;
-};
+Modify the header synopsis for `<mdspan>` in [**mdspan.syn**] as follows:
 
-template <size_t Rank>
-using dynamic_extents = typename __generate_dynamic_extents<Rank>::type;
+<blockquote>
+<b>22.7.� Header `<mdspan>` synopsis <span style="float: right;">[mdspan.syn]</span></b>
 
-template <class ElementType, size_t Rank>
-using dynamic_mdspan = basic_mdspan<ElementType, dynamic_extents<Rank>>;
-```
+<pre><code>
+namespace std {
+  // [mdspan.extents], class template extents
+  template<size_t... Extents>
+    class extents;
 
-[You can see a sketch of this on Godbolt here.](https://godbolt.org/z/1j34553e1)
+  // [mdspan.layout], Layout mapping policies
+  class layout_left;
+  class layout_right;
+  class layout_stride;
 
-## Rename `(mdspan|extents)` to `static_(extents|mdspan)` ## {#solutions-rename-mdspan-extents}
+  // [mdspan.accessor.basic]
+  template&lt;class ElementType&gt;
+    class default_accessor;
 
-If we do add something like `dynamic_extents` and `dynamic_mdspan`, why not make
-  it the default and give them the good names of `extents` and `mdspan`?
-All dynamic extents seems like the far more common use case.
+  // [mdspan.basic], class template mdspan
+  template&lt;class ElementType, class Extents, class LayoutPolicy = layout_right,
+           class AccessorPolicy = default_accessor&lt;ElementType&gt;&gt;
+    class basic_mdspan;
 
-We could rename the current `extents` to `static_extents` and the current `mdspan`
-  to `static_mdspan`.
+<div class="ins">  template &lt;class ElementType, class... IndexTypes&gt;
+  explicit basic_mdspan(ElementType*, IndexTypes...)
+    -> basic_mdspan&lt;ElementType, extents&lt;[] (auto) constexpr
+                                         { return dynamic_extent; }
+                                         (identity&lt;IndexTypes&gt;{})...&gt;&gt;;</div>
+  template&lt;class T, size_t... Extents&gt;
+    using mdspan = basic_mdspan&lt;T, extents&lt;Extents...&gt;&gt;;
 
-# P.S. No `ptrdiff_t` # {#ps-no-ptrdiff-t}
+  // [mdspan.submdspan]
+  template&lt;class ElementType, class Extents, class LayoutPolicy,
+           class AccessorPolicy, class... SliceSpecifiers&gt;
+    constexpr basic_mdspan&lt;<i>see below</i>&gt;
+    submdspan(const basic_mdspan&lt;ElementType, Extents, LayoutPolicy, AccessorPolicy&gt;&amp; m,
+              SliceSpecifiers... specs) noexcept;
 
-A final, partially related note: [[P0009R10]] must be updated to use `size_t`
-  instead of `ptrdiff_t`.
-As much as I love signed types, `dynamic_extent`, which shipped in `<span>`
-  in C++20, is defined as a `size_t`.
-If `extents`, `mdspan`, and `basic_mdspan` use `ptrdiff_t`, users will
-  experience all sorts of signedness and narrowing warnings when trying to use
-  `dynamic_extent` with these facilities.
+  // tag supporting submdspan
+  struct full_extent_t { explicit full_extent_t() = default; };
+  inline constexpr full_extent_t full_extent = full_extent_t{};
+}
+</code></pre>
+</blockquote>
+
+<pre class=biblio>
+{
+
+  "P0009R11": {
+    "authors": [
+      "Christian Trott",
+      "D.S. Hollman",
+      "Damien Lebrun-Grandie",
+      "Mark Hoemmen",
+      "Daniel Sunderland",
+      "H. Carter Edwards",
+      "Bryce Adelstein Lelbach",
+      "Mauro Bianco",
+      "Ben Sander",
+      "Athanasios Iliopoulos",
+      "John Michopoulos",
+      "Nevin Liber"
+    ],
+    "href": "https://isocpp.org/files/papers/P0009R11.html",
+    "title": "<code>mdspan</code>",
+    "date": "2020-05-11"
+  }
+}
+</pre>
