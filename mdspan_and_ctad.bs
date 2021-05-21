@@ -144,7 +144,7 @@ To make this work, we need to add a deduction guide for `basic_mdspan`.
 Through the power of alias template argument deduction, `mdspan` will be
   able to use said deduction guide as well.
 
-Here's [an example implementation](https://godbolt.org/z/z3s4KG9ae) of such a
+Here's [an example](https://godbolt.org/z/z3s4KG9ae) implementation of such a
   deduction guide for `basic_mdspan`.
 
 In earlier versions of this paper, it was unclear whether such a deduction
