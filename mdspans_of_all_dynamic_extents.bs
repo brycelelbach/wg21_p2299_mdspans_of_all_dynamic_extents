@@ -196,6 +196,47 @@ Here's [an example](https://godbolt.org/z/ahjWjeE4f) implementation.
 <td><code>dextents&lt;3&gt; <b>(proposed)</b>
 </table>
 
+If you are working with an `array`-like representation of extents, working with
+ `mdspan` can become quite awkward:
+ 
+```
+template <size_t>
+constexpr auto make_dynamic_extent() {
+  return dynamic_extent;
+}
+
+template <typename T, size_t Rank>
+struct tensor {
+  T* data;
+  array<size_t, Rank> extents;
+
+  auto get_mdspan() {
+    return get_mdspan_impl(make_index_sequence<Rank>());
+  }
+
+  template <size_t... Pack>
+  auto get_mdspan_impl(index_sequence<Pack...>) {
+    return mdspan<T, make_dynamic_extent<Pack>()...>(data, extents);
+  }
+};
+```
+
+With `dextents`, this becomes a lot simpler:
+
+```
+template <typename T, size_t Rank>
+struct tensor {
+  T* data;
+  array<size_t, Rank> extents;
+
+  template <size_t... Pack>
+  auto get_mdspan_impl(index_sequence<Pack...>) {
+
+  }
+};
+
+```
+
 # Remove `mdspan` Convenience Alias # {#convenience-alias}
 
 `dextents` will have to be used with the unfortunately named `basic_mdspan`.
