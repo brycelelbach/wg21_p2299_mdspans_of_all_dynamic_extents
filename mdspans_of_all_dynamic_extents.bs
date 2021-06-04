@@ -1,0 +1,343 @@
+<pre class='metadata'>
+Title: `mdspan`s of All Dynamic Extents
+H1: <code>mdspan</code> of All Dynamic Extents
+Shortname: D2299
+Revision: 3
+Status: D
+Group: WG21
+Audience: WG21
+Editor: Bryce Adelstein Lelbach (he/him/his) — Library Evolution Chair, NVIDIA, brycelelbach@gmail.com
+URL: https://wg21.link/P2299
+!Source: <a href="https://github.com/brycelelbach/wg21_p2299_mdspans_of_all_dynamic_extents/blob/main/mdspans_of_all_dynamic_extents.bs">GitHub</a>
+Issue Tracking: GitHub https://github.com/brycelelbach/wg21_p2299_mdspans_of_all_dynamic_extents/issues
+Metadata Order: Editor, This Version, Source, Issue Tracking, Project, Audience
+Markup Shorthands: markdown yes
+Toggle Diffs: no
+No Abstract: yes
+Boilerplate: style-syntax-highlighting off
+</pre>
+
+<style>
+table {
+  border: none !important;
+}
+th, tr, td {
+  border: 2px solid black !important;
+}
+@media (prefers-color-scheme: dark) {
+  th, tr, td {
+    border: 2px solid white !important;
+  }
+}
+pre {
+  margin-top: 0px;
+  margin-bottom: 0px;
+}
+.ins, ins, ins *, span.ins, span.ins * {
+  background-color: rgb(200, 250, 200);
+  color: rgb(0, 136, 0);
+  text-decoration: none;
+}
+.del, del, del *, span.del, span.del * {
+  background-color: rgb(250, 200, 200);
+  color: rgb(255, 0, 0);
+  text-decoration: line-through;
+  text-decoration-color: rgb(255, 0, 0);
+}
+math, span.math {
+  font-family: serif;
+  font-style: italic;
+}
+ul {
+  list-style-type: "— ";
+}
+blockquote {
+  counter-reset: paragraph;
+}
+div.numbered, div.newnumbered {
+  margin-left: 2em;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+div.numbered:before, div.newnumbered:before {
+  position: absolute;
+  margin-left: -2em;
+  display-style: block;
+}
+div.numbered:before {
+  content: counter(paragraph);
+  counter-increment: paragraph;
+}
+div.newnumbered:before {
+  content: "�";
+}
+div.numbered ul, div.newnumbered ul {
+  counter-reset: list_item;
+}
+div.numbered li, div.newnumbered li {
+  margin-left: 3em;
+}
+div.numbered li:before, div.newnumbered li:before {
+  position: absolute;
+  margin-left: -4.8em;
+  display-style: block;
+}
+div.numbered li:before {
+  content: "(" counter(paragraph) "." counter(list_item) ")";
+  counter-increment: list_item;
+}
+div.newnumbered li:before {
+  content: "(�." counter(list_item) ")";
+  counter-increment: list_item;
+}
+</style>
+
+# Introduction # {#introduction}
+
+[[P0009R12]] proposes adding non-owning multidimensional span abstractions
+  to the C++ Standard Library; `basic_mdspan`, which is fully generic and
+  can represent any kind of multidimensional data, and `mdspan`, a
+  convenience template alias for simpler use cases.
+
+```
+template <class ElementType, class Extents, class LayoutPolicy = layout_right,
+          class AccessorPolicy = accessor_basic<ElementType>>
+struct basic_mdspan;
+
+template <class ElementType, size_t... Extents>
+using mdspan = basic_mdspan<ElementType, extents<Extents...>>;
+```
+
+In the `basic_mdspan`/`span` interface, extents can be either static, e.g.
+  expressed at compile time:
+
+```
+mdspan<double, 64, 64> a(data);
+```
+
+or dynamic, e.g. expressed at run time:
+
+```
+mdspan<double, dynamic_extent, dynamic_extent> a(data, 64, 64);
+```
+
+You can also use a mix of the two styles:
+
+```
+mdspan<double, 64, dynamic_extent> a(data, 64);
+```
+
+While `basic_mdspan` and `mdspan` are powerful, the spelling of instantiations
+  can be verbose, especially for the common case where all extents are dynamic.
+
+# Class Template Argument Deduction for All Dynamic Extents # {#ctad}
+
+Using class template argument deduction (introduced in C++17) and alias
+  template argument deduction (introduced in C++20), we can make it a easier to
+  use `mdspan` with all dynamic extents:
+
+<table>
+<tr>
+<th>Before
+<th>After
+<tr>
+<td><code>mdspan&lt;double, dynamic_extent, dynamic_extent&gt; a(data, 64, 64);</code>
+<td><code>mdspan a(data, 64, 64);</code>
+</table>
+
+To make this work, we need to add a deduction guide for `basic_mdspan`.
+Through the power of alias template argument deduction, `mdspan` will be
+  able to use said deduction guide as well.
+
+Here's [an example](https://godbolt.org/z/6xhb64xTG) implementation of such a
+  deduction guide for `basic_mdspan`.
+
+In earlier versions of this paper, it was unclear whether such a deduction
+  guide would work for the alias template `mdspan`, as attempts to construct
+  one that functioned as intended had failed.
+However, we have since learned that the this is due to bugs in the two
+  implementations that currently support alias template deduction, MSVC
+  and GCC.
+Those bugs have been reported to the respective compilers and hopefully
+  will be fixed soon.
+
+Here's [an example](https://godbolt.org/z/jnWqbGr1o) of the current
+  implementation bugs that prevent the deduction guide from working for
+  `mdspan`.
+
+# Template Aliases for All Dynamic Extents # {#template-alias}
+
+The root of the interface challenge here is the heterogeneous nature of extents
+  in `mdspan`.
+When you need to express static extents or a mix of static and dynamic extents,
+  we must state the kind of every extent, similar to how we state the type of
+  every element of a `tuple`.
+This heterogenity gives us flexibility at the cost of verbosity.
+
+However, in the case of all dynamic extents, we do not need that flexibility;
+  the kind of every extent is the same.
+Instead of a `tuple`-like interface, we likely want an `array`-like interface,
+  where we can simple state the number of extents, instead of listing every one.
+
+We can provide this simplified interface easily by adding a template alias for
+  `extents` that takes the number of extents as a parameter and expands to an
+  `extents` of that many `dynamic_extents`.
+Here's [an example](https://godbolt.org/z/ahjWjeE4f) implementation.
+
+<table>
+<tr>
+<th>`tuple`-like
+<th>`array`-like
+<tr>
+<td><code>tuple&lt;T, T, T&gt;</code>
+<td><code>array&lt;T, 3&gt;</code>
+<tr>
+<td><code>extents&lt;dynamic_extent, dynamic_extent, dynamic_extent&gt;
+<td><code>dextents&lt;3&gt; <b>(proposed)</b>
+</table>
+
+# Remove `mdspan` Convenience Alias # {#convenience-alias}
+
+`dextents` will have to be used with the unfortunately named `basic_mdspan`.
+I considered proposing something along the lines of `dynamic_mdspan<T, Rank>`.
+However, this would potentially lead to confusion, as a `size_t` non-type template
+  parameter in `mdspan` would mean "static extent of this size" while  a `size_t` non-type
+  template parameter in `dynamic_mdspan` would mean "number of extents".
+
+<table>
+<tr>
+<th>Syntax
+<th>Semantics
+<tr>
+<td><code>span&lt;T, N&gt;</code>
+<td><code>span</code> with a static size of<code>N</code>.
+<tr>
+<td><code>mdspan&lt;T, N&gt;</code>
+<td><code>mdspan</code> with a single static extent of size <code>N</code>.
+<tr>
+<td><code>dynamic_mdspan&lt;T, N&gt;</code> <b>(not proposed)</b>
+<td><code>mdspan</code> with <code>N</code> dynamic extents.
+</table>
+
+Instead, I think we should:
+
+* Delete the `mdspan<T, Extents...>` alias.
+* Rename `basic_mdspan` to `mdspan`.
+
+The purpose of the `mdspan` alias was to provide a simple and easy to use
+  interface for those with less complex and advanced use cases.
+When the `mdspan`/`basic_mdspan` dichotomy was introduced when the proposal was
+  first under consideration, before the existence of Class Template Argument
+  Deduction and the proposed `dextents`.
+With the combination of these two forces, I believe that a separate `mdspan`
+  alias and `basic_mdspan` class are unnecessary to achieve a simple and easy
+  to use interface.
+
+<table>
+<tr>
+<th>Before
+<td><code>mdspan&lt;T&gt; m(data, 16, 64, 64);</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T&gt; m(data, 16, 64, 64);</code>
+<tr style="border: none !important">
+<td colspan="2" style="border: none !important; height: 10px">
+<tr>
+<th>Before
+<td><code>mdspan&lt;T, dynamic_extent, dynamic_extent, dynamic_extent&gt; f();</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T, dextents&lt;3&gt;&gt; f();</code>
+<tr style="border: none !important">
+<td colspan="2" style="border: none !important; height: 10px">
+<tr>
+<th>Before
+<td><code>mdspan&lt;T, 3, 3&gt; m;</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T, extents&lt;3, 3&gt;&gt; m;</code>
+<tr style="border: none !important">
+<td colspan="2" style="border: none !important; height: 10px">
+<tr>
+<th>Before
+<td><code>mdspan&lt;T, 3, 3&gt; f();</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T, extents&lt;3, 3&gt;&gt; f();</code>
+<tr style="border: none !important">
+<td colspan="2" style="border: none !important; height: 10px">
+<tr>
+<th>Before
+<td><code>mdspan&lt;T, 16, dynamic_extent, 64&gt; m;</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T, extents&lt;16, dynamic_extent, 64&gt;&gt; m;</code>
+<tr style="border: none !important">
+<td colspan="2" style="border: none !important; height: 10px">
+<tr>
+<th>Before
+<td><code>mdspan&lt;T, 16, dynamic_extent, 64&gt; f();</code>
+<tr>
+<th>After
+<td><code>mdspan&lt;T, extents&lt;16, dynamic_extent, 64&gt;&gt; f();</code>
+</table>
+
+# Wording # {#wording}
+
+The following changes are relative to the `mdspan` proposal ([[P0009R12]]).
+
+The � character is used to denote a placeholder number which shall be selected by the editor.
+
+Modify the header synopsis for `<mdspan>` in [**mdspan.syn**] as follows:
+
+<blockquote>
+<b>22.7.� Header `<mdspan>` synopsis <span style="float: right;">[mdspan.syn]</span></b>
+
+<pre><code>
+namespace std {
+  // [mdspan.extents], class template extents
+  template<size_t... Extents>
+    class extents;
+
+<div class="ins">  template&lt;size_t Rank&gt;
+    using dextents = decltype([] &lt;size_t... Pack&gt; (index_sequence&lt;Pack...&gt;) constexpr {
+                       return extents&lt;[] (auto) constexpr
+                                      { return dynamic_extent; }
+                                      (integral_constant&lt;size_t, Pack&gt;{})...&gt;{};
+                     }(make_index_sequence&lt;Rank&gt;{}));</div>
+  // [mdspan.layout], Layout mapping policies
+  class layout_left;
+  class layout_right;
+  class layout_stride;
+
+  // [mdspan.accessor.basic]
+  template&lt;class ElementType&gt;
+    class default_accessor;
+
+  // [mdspan.basic], class template mdspan
+  template&lt;class ElementType, class Extents, class LayoutPolicy = layout_right,
+           class AccessorPolicy = default_accessor&lt;ElementType&gt;&gt;
+    class basic_mdspan;
+
+<div class="ins">  template &lt;class ElementType, class... Integrals&gt;
+  explicit basic_mdspan(ElementType*, Integrals...)
+    -> basic_mdspan&lt;ElementType, extents&lt;[] (auto) constexpr
+                                         { return dynamic_extent; }
+                                         (identity&lt;Integrals&gt;{})...&gt;&gt;;</div>
+<div class="del">  template&lt;class T, size_t... Extents&gt;
+    using mdspan = basic_mdspan&lt;T, extents&lt;Extents...&gt;&gt;;</div>
+  // [mdspan.submdspan]
+  template&lt;class ElementType, class Extents, class LayoutPolicy,
+           class AccessorPolicy, class... SliceSpecifiers&gt;
+    constexpr basic_mdspan&lt;<i>see below</i>&gt;
+    submdspan(const basic_mdspan&lt;ElementType, Extents, LayoutPolicy, AccessorPolicy&gt;&amp; m,
+              SliceSpecifiers... specs) noexcept;
+
+  // tag supporting submdspan
+  struct full_extent_t { explicit full_extent_t() = default; };
+  inline constexpr full_extent_t full_extent = full_extent_t{};
+}
+</code></pre>
+</blockquote>
+
+Replace all occurences of `basic_mdspan` with `mdspan`.
