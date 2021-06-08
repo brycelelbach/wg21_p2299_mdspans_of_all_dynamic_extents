@@ -362,9 +362,7 @@ namespace std {
 
 <div class="ins">  template &lt;class ElementType, class... Integrals&gt;
   explicit basic_mdspan(ElementType*, Integrals...)
-    -> basic_mdspan&lt;ElementType, extents&lt;[] (auto) constexpr
-                                         { return dynamic_extent; }
-                                         (identity&lt;Integrals&gt;{})...&gt;&gt;;</div>
+    -> basic_mdspan&lt;ElementType, dextents&lt;sizeof...(Integrals)&gt;</div>
 <div class="del">  template&lt;class T, size_t... Extents&gt;
     using mdspan = basic_mdspan&lt;T, extents&lt;Extents...&gt;&gt;;</div>
   // [mdspan.submdspan]
