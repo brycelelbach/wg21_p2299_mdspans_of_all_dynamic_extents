@@ -1,9 +1,9 @@
 <pre class='metadata'>
 Title: `mdspan`s of All Dynamic Extents
 H1: <code>mdspan</code> of All Dynamic Extents
-Shortname: D2299
+Shortname: P2299
 Revision: 4
-Status: D
+Status: P
 Group: WG21
 Audience: WG21
 Editor: Bryce Adelstein Lelbach (he/him/his) — Library Evolution Chair, NVIDIA, brycelelbach@gmail.com
