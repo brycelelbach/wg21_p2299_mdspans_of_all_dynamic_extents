@@ -198,7 +198,7 @@ Here's [an example](https://godbolt.org/z/ahjWjeE4f) implementation.
 
 If you are working with an `array`-like representation of extents, working with
  `mdspan` can become quite awkward:
- 
+
 ```
 template <size_t>
 constexpr auto make_dynamic_extent() {
@@ -229,12 +229,10 @@ struct tensor {
   T* data;
   array<size_t, Rank> extents;
 
-  template <size_t... Pack>
-  auto get_mdspan_impl(index_sequence<Pack...>) {
-
+  auto get_mdspan() {
+    return mdspan(data, dextents<Rank>(extents));
   }
 };
-
 ```
 
 # Remove `mdspan` Convenience Alias # {#convenience-alias}
